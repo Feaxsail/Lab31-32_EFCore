@@ -61,7 +61,7 @@ public class TasksController : ControllerBase
             Priority = dto.Priority ?? "Normal",
             IsCompleted = false,
             CreatedAt = DateTime.UtcNow,
-            DueDate = dto.DueDate  
+            DueDate = dto.DueDate
         };
 
         _db.Tasks.Add(task);
@@ -69,7 +69,7 @@ public class TasksController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);
     }
 
-  
+    
     [HttpPut("{id}")]
     public async Task<ActionResult<TaskItem>> Update(int id, [FromBody] UpdateTaskDto dto)
     {
@@ -84,7 +84,7 @@ public class TasksController : ControllerBase
         task.Description = dto.Description?.Trim() ?? string.Empty;
         task.IsCompleted = dto.IsCompleted;
         task.Priority = dto.Priority;
-        task.DueDate = dto.DueDate;  
+        task.DueDate = dto.DueDate;
 
         await _db.SaveChangesAsync();
         return Ok(task);
@@ -170,7 +170,7 @@ public class TasksController : ControllerBase
         });
     }
 
-    
+   
     [HttpGet("paged")]
     public async Task<ActionResult> GetPaged(
         [FromQuery] int page = 1,
@@ -213,5 +213,32 @@ public class TasksController : ControllerBase
             .OrderBy(t => t.DueDate)
             .ToListAsync();
         return Ok(overdue);
+    }
+
+    //  САМОСТОЯТЕЛЬНЫЕ ЗАДАНИЯ 
+
+    // Задание 1
+
+    [HttpPatch("complete-all")]
+    public async Task<ActionResult> CompleteAll()
+    {
+        var tasks = await _db.Tasks.Where(t => !t.IsCompleted).ToListAsync();
+        foreach (var task in tasks)
+        {
+            task.IsCompleted = true;
+        }
+        await _db.SaveChangesAsync();
+        return Ok(new { Updated = tasks.Count });
+    }
+
+    // Задание 2: 
+    
+    [HttpDelete("completed")]
+    public async Task<ActionResult> DeleteCompleted()
+    {
+        var tasks = await _db.Tasks.Where(t => t.IsCompleted).ToListAsync();
+        _db.Tasks.RemoveRange(tasks);
+        await _db.SaveChangesAsync();
+        return Ok(new { Deleted = tasks.Count });
     }
 }
