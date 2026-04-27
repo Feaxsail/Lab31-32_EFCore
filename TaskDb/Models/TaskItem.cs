@@ -4,6 +4,8 @@ namespace TaskDb.Models;
 
 public class TaskItem
 {
+    
+    public DateTime? DueDate { get; set; }
     public int Id { get; set; }
     public bool IsCompleted { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

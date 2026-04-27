@@ -26,12 +26,14 @@ public class TasksController : ControllerBase
 
         if (completed.HasValue)
             query = query.Where(t => t.IsCompleted == completed.Value);
+
         if (!string.IsNullOrWhiteSpace(priority))
             query = query.Where(t => t.Priority == priority);
 
         var tasks = await query
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
+
         return Ok(tasks);
     }
 
@@ -58,7 +60,8 @@ public class TasksController : ControllerBase
             Description = dto.Description?.Trim() ?? string.Empty,
             Priority = dto.Priority ?? "Normal",
             IsCompleted = false,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            DueDate = dto.DueDate  
         };
 
         _db.Tasks.Add(task);
@@ -66,7 +69,7 @@ public class TasksController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = task.Id }, task);
     }
 
-    
+  
     [HttpPut("{id}")]
     public async Task<ActionResult<TaskItem>> Update(int id, [FromBody] UpdateTaskDto dto)
     {
@@ -81,6 +84,7 @@ public class TasksController : ControllerBase
         task.Description = dto.Description?.Trim() ?? string.Empty;
         task.IsCompleted = dto.IsCompleted;
         task.Priority = dto.Priority;
+        task.DueDate = dto.DueDate;  
 
         await _db.SaveChangesAsync();
         return Ok(task);
@@ -99,7 +103,7 @@ public class TasksController : ControllerBase
         return Ok(task);
     }
 
-
+    
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
@@ -111,60 +115,60 @@ public class TasksController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
     
-    
-[HttpGet("search")]
-public async Task<ActionResult<IEnumerable<TaskItem>>> Search(
-    [FromQuery] string? query = null,
-    [FromQuery] string? priority = null,
-    [FromQuery] bool? completed = null)
-{
-    var q = _db.Tasks.AsQueryable();
-
-    if (!string.IsNullOrWhiteSpace(query))
-        q = q.Where(t =>
-            t.Title.Contains(query) ||
-            t.Description.Contains(query));
-
-    if (!string.IsNullOrWhiteSpace(priority))
-        q = q.Where(t => t.Priority == priority);
-
-    if (completed.HasValue)
-        q = q.Where(t => t.IsCompleted == completed.Value);
-
-    var results = await q
-        .OrderByDescending(t => t.CreatedAt)
-        .ToListAsync();
-    return Ok(results);
-}
-
-
-[HttpGet("stats")]
-public async Task<ActionResult> GetStats()
-{
-    var total = await _db.Tasks.CountAsync();
-    var completed = await _db.Tasks.CountAsync(t => t.IsCompleted);
-    var pending = total - completed;
-
-    var byPriority = await _db.Tasks
-        .GroupBy(t => t.Priority)
-        .Select(g => new { Priority = g.Key, Count = g.Count() })
-        .ToListAsync();
-
-    var recentDate = DateTime.UtcNow.AddDays(-7);
-    var recentCount = await _db.Tasks
-        .CountAsync(t => t.CreatedAt >= recentDate);
-
-    return Ok(new
+    [HttpGet("search")]
+    public async Task<ActionResult<IEnumerable<TaskItem>>> Search(
+        [FromQuery] string? query = null,
+        [FromQuery] string? priority = null,
+        [FromQuery] bool? completed = null)
     {
-        Total = total,
-        Completed = completed,
-        Pending = pending,
-        CompletionPct = total > 0 ? Math.Round((double)completed / total * 100, 1) : 0,
-        ByPriority = byPriority,
-        CreatedLastWeek = recentCount
-    });
-}
+        var q = _db.Tasks.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query))
+            q = q.Where(t =>
+                t.Title.Contains(query) ||
+                (t.Description != null && t.Description.Contains(query)));
+
+        if (!string.IsNullOrWhiteSpace(priority))
+            q = q.Where(t => t.Priority == priority);
+
+        if (completed.HasValue)
+            q = q.Where(t => t.IsCompleted == completed.Value);
+
+        var results = await q
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+        return Ok(results);
+    }
+
+    
+    [HttpGet("stats")]
+    public async Task<ActionResult> GetStats()
+    {
+        var total = await _db.Tasks.CountAsync();
+        var completed = await _db.Tasks.CountAsync(t => t.IsCompleted);
+        var pending = total - completed;
+
+        var byPriority = await _db.Tasks
+            .GroupBy(t => t.Priority)
+            .Select(g => new { Priority = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var recentDate = DateTime.UtcNow.AddDays(-7);
+        var recentCount = await _db.Tasks
+            .CountAsync(t => t.CreatedAt >= recentDate);
+
+        return Ok(new
+        {
+            Total = total,
+            Completed = completed,
+            Pending = pending,
+            CompletionPct = total > 0 ? Math.Round((double)completed / total * 100, 1) : 0,
+            ByPriority = byPriority,
+            CreatedLastWeek = recentCount
+        });
+    }
 
     
     [HttpGet("paged")]
@@ -195,5 +199,19 @@ public async Task<ActionResult> GetStats()
             HasNext = page < totalPages,
             Items = tasks
         });
+    }
+
+    
+    [HttpGet("overdue")]
+    public async Task<ActionResult<IEnumerable<TaskItem>>> GetOverdue()
+    {
+        var now = DateTime.UtcNow;
+        var overdue = await _db.Tasks
+            .Where(t => t.DueDate != null
+                        && t.DueDate < now
+                        && !t.IsCompleted)
+            .OrderBy(t => t.DueDate)
+            .ToListAsync();
+        return Ok(overdue);
     }
 }
